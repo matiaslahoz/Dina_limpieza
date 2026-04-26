@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 import { env } from '@/lib/env';
+import { registerPushToken } from '@/lib/push';
 import { setSupabaseAccessToken, supabase } from '@/lib/supabase';
 import type { Profile, UserRole } from '@/types';
 
@@ -115,7 +116,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       .select('*')
       .eq('auth0_sub', jwtDecode<{ sub: string }>(next.accessToken).sub)
       .maybeSingle();
-    if (!error) setProfile((data as Profile | null) ?? null);
+    if (!error) {
+      const profile = (data as Profile | null) ?? null;
+      setProfile(profile);
+      if (profile) registerPushToken(profile.id).catch(() => {});
+    }
   }, []);
 
   const refresh = useCallback(

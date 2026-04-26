@@ -93,6 +93,14 @@ export default function BuildingDetail() {
       <Text style={styles.title}>{building?.name ?? 'Edificio'}</Text>
       {building?.address ? <Text style={styles.muted}>{building.address}</Text> : null}
 
+      <Button
+        title="Editar edificio (geofence / notificaciones)"
+        variant="secondary"
+        onPress={() =>
+          id && router.push({ pathname: '/(admin)/buildings/edit/[id]', params: { id } })
+        }
+      />
+
       <Text style={styles.section}>Pisos</Text>
       <View style={styles.formRow}>
         <TextInput

@@ -17,12 +17,17 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.dina.limpieza",
       "infoPlist": {
-        "NSCameraUsageDescription": "Necesitamos la cámara para escanear los códigos QR de cada habitación."
+        "NSCameraUsageDescription": "Necesitamos la cámara para escanear los códigos QR de cada habitación.",
+        "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación al hacer check-in para verificar que estás en el edificio."
       }
     },
     "android": {
       "package": "com.dina.limpieza",
-      "permissions": ["CAMERA"],
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F4C81"
@@ -38,6 +43,19 @@
         "expo-camera",
         {
           "cameraPermission": "Permitir a Dina Limpieza usar la cámara para escanear QR."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Usamos tu ubicación al hacer check-in para verificar que estás en el edificio."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0F4C81"
         }
       ]
     ],

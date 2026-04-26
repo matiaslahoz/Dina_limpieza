@@ -9,8 +9,15 @@ export const getOpenSession = async () => {
   return (data as CleaningSession | null) ?? null;
 };
 
-export const checkIn = async (qrToken: string) => {
-  const { data, error } = await supabase.rpc('check_in', { p_qr_token: qrToken });
+export const checkIn = async (
+  qrToken: string,
+  coords?: { lat: number; lng: number },
+) => {
+  const { data, error } = await supabase.rpc('check_in', {
+    p_qr_token: qrToken,
+    p_lat: coords?.lat ?? null,
+    p_lng: coords?.lng ?? null,
+  });
   if (error) throw error;
   return data as CleaningSession;
 };
@@ -27,7 +34,9 @@ export const checkOut = async (qrToken: string, notes?: string) => {
 export const fetchRoomByQr = async (qrToken: string) => {
   const { data, error } = await supabase
     .from('rooms')
-    .select('id, name, kind, floor:floors(id, name, ordinal, building:buildings(id, name))')
+    .select(
+      'id, name, kind, floor:floors(id, name, ordinal, building:buildings(id, name, latitude, longitude, geofence_radius_m))',
+    )
     .eq('qr_token', qrToken)
     .maybeSingle();
   if (error) throw error;

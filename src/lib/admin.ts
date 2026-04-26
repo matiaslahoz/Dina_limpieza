@@ -73,12 +73,53 @@ export const setRoomActive = async (roomId: string, active: boolean) => {
   if (error) throw error;
 };
 
-export const fetchRecentSessions = async (limit = 50) => {
-  const { data, error } = await supabase
+export interface ReportFilters {
+  buildingId?: string | null;
+  floorId?: string | null;
+  from?: string | null; // ISO
+  to?: string | null;   // ISO
+  limit?: number;
+}
+
+export const fetchSessionsReport = async (filters: ReportFilters = {}) => {
+  let q = supabase
     .from('cleaning_history')
     .select('*')
     .order('check_in_at', { ascending: false })
-    .limit(limit);
+    .limit(filters.limit ?? 500);
+  if (filters.buildingId) q = q.eq('building_id', filters.buildingId);
+  if (filters.floorId) q = q.eq('floor_id', filters.floorId);
+  if (filters.from) q = q.gte('check_in_at', filters.from);
+  if (filters.to) q = q.lte('check_in_at', filters.to);
+  const { data, error } = await q;
   if (error) throw error;
   return (data as CleaningHistoryRow[]) ?? [];
+};
+
+export const fetchRecentSessions = (limit = 50) =>
+  fetchSessionsReport({ limit });
+
+export const fetchFloorsForBuilding = async (buildingId: string) => {
+  const { data, error } = await supabase
+    .from('floors')
+    .select('id, name, ordinal')
+    .eq('building_id', buildingId)
+    .order('ordinal');
+  if (error) throw error;
+  return data ?? [];
+};
+
+export const updateBuilding = async (
+  id: string,
+  patch: Partial<{
+    name: string;
+    address: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    geofence_radius_m: number | null;
+    stale_threshold_hours: number | null;
+  }>,
+) => {
+  const { error } = await supabase.from('buildings').update(patch).eq('id', id);
+  if (error) throw error;
 };

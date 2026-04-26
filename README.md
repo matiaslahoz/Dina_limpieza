@@ -64,18 +64,43 @@ npm run start              # abre el dev server, escaneá con Expo Go o corré e
 3. **API** → crear una API con Identifier (audience) `https://api.dina-limpieza`
    y dejar **RBAC** + **Add Permissions in the Access Token** activados.
 4. **Roles** → crear `admin`, `cleaner`, `client`. Asignar a los usuarios.
-5. **Action (Login flow)** → agregar los roles como claim custom:
+5. **Action (Login flow)** → un único Action que (a) inyecta los roles en el
+   token y (b) avisa a Supabase para crear/actualizar el profile:
 
    ```js
    exports.onExecutePostLogin = async (event, api) => {
      const namespace = 'https://dina.app/roles';
-     const roles = (event.authorization?.roles ?? []);
+     const roles = event.authorization?.roles ?? [];
      api.accessToken.setCustomClaim(namespace, roles);
      api.idToken.setCustomClaim(namespace, roles);
+
+     // Sync con Supabase (idempotente, no bloquea login si falla)
+     try {
+       await fetch(event.secrets.SUPABASE_SYNC_URL, {
+         method: 'POST',
+         headers: {
+           'content-type': 'application/json',
+           'x-shared-secret': event.secrets.SUPABASE_SYNC_SECRET,
+         },
+         body: JSON.stringify({
+           auth0_sub: event.user.user_id,
+           email: event.user.email,
+           full_name: event.user.name,
+           roles,
+         }),
+       });
+     } catch (e) {
+       console.log('supabase sync failed', e);
+     }
    };
    ```
 
-   Si cambiás el namespace, actualizá `EXPO_PUBLIC_AUTH0_ROLES_CLAIM`.
+   En el Action, agregar dos *secrets*:
+   - `SUPABASE_SYNC_URL`: `https://<PROJECT_REF>.functions.supabase.co/auth0-sync-profile`
+   - `SUPABASE_SYNC_SECRET`: el mismo valor seteado en
+     `AUTH0_SYNC_SECRET` de la Edge Function.
+
+   Si cambiás el namespace de roles, actualizá `EXPO_PUBLIC_AUTH0_ROLES_CLAIM`.
 
 6. Llenar `.env`:
 
@@ -94,7 +119,11 @@ npm run start              # abre el dev server, escaneá con Expo Go o corré e
    contra el JWKS de Auth0:
    - JWT Secret: el secreto compartido (o JWKS endpoint si usás *Third-party JWT*).
    - JWT Audience: `https://api.dina-limpieza`.
-3. **SQL Editor** → pegar `supabase/migrations/20260426_init.sql` y ejecutar.
+3. **SQL Editor** → ejecutar las migrations en orden:
+   - `supabase/migrations/20260426_init.sql` (esquema base + RLS + RPCs)
+   - `supabase/migrations/20260427_features.sql` (geofence, push token, stale rooms)
+   - `supabase/migrations/20260427_cron.sql` (programa la job cada 30 minutos
+     — reemplazar `<PROJECT_REF>` y `<CRON_SECRET>` por los valores reales)
 4. (Opcional) ejecutar `supabase/seed.sql` para crear el cliente demo y 4
    edificios.
 5. Copiá `Project URL` y `anon key` a `.env`:
@@ -104,10 +133,28 @@ npm run start              # abre el dev server, escaneá con Expo Go o corré e
    EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
    ```
 
-6. **Importante**: cada usuario que se loguea en Auth0 necesita una fila en
-   `profiles` con su `auth0_sub`, `role` y (para `client`) su `client_org_id`.
-   Hoy esto se hace manualmente. Próximo paso: agregar un Auth0 Action que
-   llame a un Edge Function de Supabase para crear el profile la primera vez.
+6. **Edge Functions** (necesitan el [Supabase CLI](https://supabase.com/docs/guides/cli)):
+
+   ```bash
+   supabase login
+   supabase link --project-ref <PROJECT_REF>
+
+   # Secrets server-side (NO van al .env del cliente)
+   supabase secrets set \
+     AUTH0_SYNC_SECRET=$(openssl rand -hex 32) \
+     CRON_SECRET=$(openssl rand -hex 32)
+
+   supabase functions deploy auth0-sync-profile
+   supabase functions deploy notify-stale-rooms
+   ```
+
+   - Copiar `AUTH0_SYNC_SECRET` al *secret* `SUPABASE_SYNC_SECRET` del Auth0
+     Action (sección Auth0 más arriba).
+   - Copiar `CRON_SECRET` al SQL de `20260427_cron.sql` antes de correrlo.
+
+7. Los profiles se crean **automáticamente** en el primer login gracias al
+   Auth0 Action. El admin sólo tiene que asignar `client_org_id` a los usuarios
+   con rol `client` (desde Supabase, una sola vez).
 
 ## Cómo funciona el flujo
 
@@ -124,14 +171,30 @@ npm run start              # abre el dev server, escaneá con Expo Go o corré e
    `qr_token` único) y desde la pantalla de la habitación imprime un PDF con
    el QR para pegar en la puerta.
 
+## Funciones automáticas
+
+- **Auto-provisioning de profiles**: el Auth0 Post-Login Action llama a la
+  Edge Function `auth0-sync-profile` que hace upsert en `profiles`.
+- **Geofence opcional**: si `building.geofence_radius_m` está seteado, el
+  cleaner debe estar dentro del radio para hacer check-in. Se valida tanto
+  client-side (UX) como server-side en la RPC `check_in`.
+- **Notificaciones de habitaciones sin limpiar**: cada edificio puede tener
+  un `stale_threshold_hours`. Cada 30 minutos pg_cron invoca la Edge Function
+  `notify-stale-rooms` que manda push (vía Expo) a admins y al cliente del
+  edificio si una habitación supera el umbral. Para no spamear hay un
+  cooldown de 6 horas por habitación.
+- **Push tokens**: la app registra automáticamente el `expo_push_token` en el
+  profile al loguearse. Para que funcionen los push en producción hay que
+  buildear con EAS (`eas build`); en Expo Go los push tokens funcionan sólo
+  para el proyecto del dueño del Expo Go.
+
 ## Próximos pasos sugeridos
 
-- [ ] Auto-aprovisionar profile en el primer login (Auth0 Action + Edge Function)
-- [ ] Notificación push cuando una habitación lleva mucho tiempo sin limpiar
-- [ ] Reportes filtrables por edificio / piso / rango de fechas (export CSV)
 - [ ] Foto opcional al hacer check-out para evidenciar el trabajo
-- [ ] Geofence: validar que el cleaner está físicamente en el edificio al escanear
+- [ ] Edge Function que reciba webhooks de Auth0 *al asignar/quitar roles*
+      para sincronizar el `role` en `profiles`
 - [ ] Tests con Detox / Jest
+- [ ] Selector de mapa para fijar coords del edificio (vs. ingreso manual)
 
 ## Comandos útiles
 

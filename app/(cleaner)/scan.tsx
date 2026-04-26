@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,11 +11,22 @@ import type { CleaningSession } from '@/types';
 
 type Mode = 'in' | 'out';
 
+interface BuildingCtx {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+  geofence_radius_m: number | null;
+}
+
 interface RoomCtx {
   id: string;
   name: string;
-  floor: { name: string; ordinal: number; building: { name: string } } | null;
+  floor: { name: string; ordinal: number; building: BuildingCtx } | null;
 }
+
+const requireGeofence = (b?: BuildingCtx | null) =>
+  !!(b && b.geofence_radius_m && b.geofence_radius_m > 0 && b.latitude != null && b.longitude != null);
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -57,7 +69,22 @@ export default function ScanScreen() {
     setBusy(true);
     try {
       if (mode === 'in') {
-        await checkIn(token);
+        let coords: { lat: number; lng: number } | undefined;
+        if (requireGeofence(room?.floor?.building)) {
+          const perm = await Location.requestForegroundPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert(
+              'Ubicación necesaria',
+              'Este edificio requiere validar tu ubicación al hacer check-in.',
+            );
+            return;
+          }
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        }
+        await checkIn(token, coords);
         Alert.alert('Listo', 'Check-in registrado.');
       } else {
         await checkOut(token, notes || undefined);
