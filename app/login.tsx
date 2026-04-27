@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
@@ -7,13 +8,19 @@ import { clearAuthLogs, subscribeAuthLogs } from '@/auth/authLog';
 import { theme } from '@/theme';
 
 export default function Login() {
-  const { signIn, redirectUri } = useAuth();
+  const router = useRouter();
+  const { signIn, signedIn, redirectUri } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
 
   useEffect(() => subscribeAuthLogs(setLogs), []);
+
+  // Si ya hay tokens (recién login o sesión persistida) salimos del login.
+  useEffect(() => {
+    if (signedIn) router.replace('/');
+  }, [signedIn, router]);
 
   const handle = async () => {
     setBusy(true);

@@ -36,6 +36,7 @@ interface AuthState {
   profile: Profile | null;
   email: string | null;
   name: string | null;
+  auth0Sub: string | null;
   redirectUri: string;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -276,6 +277,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [applyTokens, redirectUri]);
 
   const role = tokens ? extractRole(tokens.accessToken) ?? profile?.role ?? null : null;
+  const auth0Sub = (() => {
+    if (!tokens) return null;
+    try {
+      return jwtDecode<{ sub?: string }>(tokens.accessToken).sub ?? null;
+    } catch {
+      return null;
+    }
+  })();
 
   const value: AuthState = {
     loading,
@@ -284,6 +293,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     profile,
     email: identity.email,
     name: identity.name,
+    auth0Sub,
     redirectUri,
     signIn,
     signOut,
