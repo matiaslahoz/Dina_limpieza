@@ -22,7 +22,7 @@ export default function BuildingsList() {
   useFocusEffect(
     useCallback(() => {
       listAllBuildings()
-        .then((d) => setItems(d as Row[]))
+        .then((d) => setItems(d as unknown as Row[]))
         .finally(() => setLoading(false));
     }, []),
   );

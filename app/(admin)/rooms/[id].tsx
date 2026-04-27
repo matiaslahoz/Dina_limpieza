@@ -27,7 +27,7 @@ export default function RoomDetailScreen() {
   const load = useCallback(() => {
     if (!id) return;
     fetchRoom(id)
-      .then((r) => setRoom(r as RoomDetail))
+      .then((r) => setRoom(r as unknown as RoomDetail))
       .finally(() => setLoading(false));
   }, [id]);
 
