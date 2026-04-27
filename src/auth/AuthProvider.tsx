@@ -35,6 +35,7 @@ interface AuthState {
   profile: Profile | null;
   email: string | null;
   name: string | null;
+  redirectUri: string;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -86,10 +87,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const redirectUri = useMemo(
-    () => AuthSession.makeRedirectUri({ scheme: 'dinalimpieza', path: 'auth' }),
-    [],
-  );
+  const redirectUri = useMemo(() => {
+    const uri = AuthSession.makeRedirectUri({ scheme: 'dinalimpieza', path: 'auth' });
+    if (__DEV__) console.log('[Auth0] redirect_uri =', uri);
+    return uri;
+  }, []);
 
   const applyTokens = useCallback(async (next: StoredTokens | null) => {
     setTokens(next);
@@ -234,6 +236,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     profile,
     email: identity.email,
     name: identity.name,
+    redirectUri,
     signIn,
     signOut,
   };

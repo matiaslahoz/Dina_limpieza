@@ -1,14 +1,15 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/auth/AuthProvider';
 import { theme } from '@/theme';
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { signIn, redirectUri } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   const handle = async () => {
     setBusy(true);
@@ -35,6 +36,25 @@ export default function Login() {
       </View>
       <Button title="Ingresar con Auth0" onPress={handle} loading={busy} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {__DEV__ ? (
+        <Pressable onPress={() => setShowDebug((s) => !s)} style={styles.debugBox}>
+          <Text style={styles.debugLabel}>
+            {showDebug ? 'Ocultar' : 'Mostrar'} redirect_uri (debug)
+          </Text>
+          {showDebug ? (
+            <Text selectable style={styles.debugUri}>
+              {redirectUri}
+            </Text>
+          ) : null}
+          {showDebug ? (
+            <Text style={styles.debugHint}>
+              Copialo y agregalo en Auth0 → Application → Allowed Callback URLs
+              y Allowed Logout URLs.
+            </Text>
+          ) : null}
+        </Pressable>
+      ) : null}
     </Screen>
   );
 }
@@ -58,4 +78,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   error: { color: theme.colors.danger, textAlign: 'center' },
+  debugBox: {
+    marginTop: 24,
+    padding: 12,
+    borderRadius: theme.radius,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    gap: 6,
+  },
+  debugLabel: { color: theme.colors.primary, fontWeight: '600' },
+  debugUri: { fontFamily: 'Courier', color: theme.colors.text, fontSize: 12 },
+  debugHint: { color: theme.colors.textMuted, fontSize: 12 },
 });
