@@ -1,4 +1,6 @@
-import * as FileSystem from 'expo-file-system';
+// SDK 54: la API "next" de expo-file-system es la default. Mantenemos la
+// sintaxis simple usando el bundle legacy.
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 const escape = (v: unknown): string => {

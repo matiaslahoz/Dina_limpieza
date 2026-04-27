@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -67,7 +67,10 @@
       "auth0ClientId": "AUTH0_CLIENT_ID_PLACEHOLDER",
       "auth0Audience": "AUTH0_AUDIENCE_PLACEHOLDER",
       "supabaseUrl": "SUPABASE_URL_PLACEHOLDER",
-      "supabaseAnonKey": "SUPABASE_ANON_KEY_PLACEHOLDER"
+      "supabaseAnonKey": "SUPABASE_ANON_KEY_PLACEHOLDER",
+      "eas": {
+        "projectId": "EAS_PROJECT_ID_PLACEHOLDER"
+      }
     }
   }
 }
