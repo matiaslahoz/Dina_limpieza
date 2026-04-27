@@ -125,8 +125,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         sub: auth0Sub,
         aud: accessPayload.aud,
         iss: accessPayload.iss,
+        scope: accessPayload.scope,
+        permissions: accessPayload.permissions,
         rolesClaimKey: env.auth0RolesClaim,
-        rolesClaim: roleClaim,
+        rolesClaim: roleClaim ?? '<<undefined>>',
+        allClaimKeys: Object.keys(accessPayload),
       });
     } catch (e) {
       pushAuthLog('access_token decode FAILED', String(e));
