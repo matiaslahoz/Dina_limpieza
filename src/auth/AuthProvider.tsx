@@ -15,6 +15,7 @@ import { env } from '@/lib/env';
 import { registerPushToken } from '@/lib/push';
 import { setSupabaseAccessToken, supabase } from '@/lib/supabase';
 import type { Profile, UserRole } from '@/types';
+import { pushAuthLog } from './authLog';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -89,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const redirectUri = useMemo(() => {
     const uri = AuthSession.makeRedirectUri({ scheme: 'dinalimpieza', path: 'auth' });
-    if (__DEV__) console.log('[Auth0] redirect_uri =', uri);
+    pushAuthLog('redirect_uri', uri);
     return uri;
   }, []);
 
@@ -113,12 +114,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     }
 
+    let auth0Sub: string | null = null;
+    let roleClaim: unknown = null;
+    try {
+      const accessPayload = jwtDecode<Record<string, unknown>>(next.accessToken);
+      auth0Sub = (accessPayload.sub as string) ?? null;
+      roleClaim = accessPayload[env.auth0RolesClaim];
+      pushAuthLog('access_token decoded', {
+        sub: auth0Sub,
+        aud: accessPayload.aud,
+        iss: accessPayload.iss,
+        rolesClaimKey: env.auth0RolesClaim,
+        rolesClaim: roleClaim,
+      });
+    } catch (e) {
+      pushAuthLog('access_token decode FAILED', String(e));
+    }
+
+    if (!auth0Sub) return;
+
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('auth0_sub', jwtDecode<{ sub: string }>(next.accessToken).sub)
+      .eq('auth0_sub', auth0Sub)
       .maybeSingle();
-    if (!error) {
+    if (error) {
+      pushAuthLog('supabase profile fetch ERROR', {
+        message: error.message,
+        code: (error as { code?: string }).code,
+        hint: (error as { hint?: string }).hint,
+      });
+    } else {
+      pushAuthLog('supabase profile', data ?? 'null');
       const profile = (data as Profile | null) ?? null;
       setProfile(profile);
       if (profile) registerPushToken(profile.id).catch(() => {});
@@ -182,6 +209,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [tokens, refresh, applyTokens]);
 
   const signIn = useCallback(async () => {
+    pushAuthLog('signIn() called');
     const request = new AuthSession.AuthRequest({
       clientId: env.auth0ClientId,
       redirectUri,
@@ -190,22 +218,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       usePKCE: true,
       extraParams: { audience: env.auth0Audience, prompt: 'login' },
     });
+    pushAuthLog('promptAsync...');
     const result = await request.promptAsync(discovery);
+    pushAuthLog('promptAsync result', {
+      type: result.type,
+      params: 'params' in result ? Object.keys(result.params) : undefined,
+      error: 'error' in result ? result.error : undefined,
+    });
     if (result.type !== 'success' || !result.params.code) {
-      throw new Error('Login cancelado');
+      throw new Error(`Login no completó (${result.type})`);
     }
-    const exchange = await AuthSession.exchangeCodeAsync(
-      {
-        clientId: env.auth0ClientId,
-        code: result.params.code,
-        redirectUri,
-        extraParams: {
-          code_verifier: request.codeVerifier ?? '',
-          audience: env.auth0Audience,
+    pushAuthLog('exchangeCodeAsync...');
+    let exchange;
+    try {
+      exchange = await AuthSession.exchangeCodeAsync(
+        {
+          clientId: env.auth0ClientId,
+          code: result.params.code,
+          redirectUri,
+          extraParams: {
+            code_verifier: request.codeVerifier ?? '',
+            audience: env.auth0Audience,
+          },
         },
-      },
-      discovery,
-    );
+        discovery,
+      );
+    } catch (e) {
+      pushAuthLog('exchangeCodeAsync FAILED', String(e));
+      throw e;
+    }
+    pushAuthLog('exchange ok', {
+      hasAccess: !!exchange.accessToken,
+      hasId: !!exchange.idToken,
+      hasRefresh: !!exchange.refreshToken,
+      expiresIn: exchange.expiresIn,
+    });
     const next: StoredTokens = {
       accessToken: exchange.accessToken,
       idToken: exchange.idToken,
@@ -213,6 +260,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       expiresAt: Date.now() + (exchange.expiresIn ?? 3600) * 1000,
     };
     await applyTokens(next);
+    pushAuthLog('applyTokens done');
   }, [redirectUri, applyTokens]);
 
   const signOut = useCallback(async () => {
